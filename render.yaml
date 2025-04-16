@@ -1,6 +1,6 @@
 
 services:
-  n8n-server:
+  name: n8n-server
     image: n8nio/n8n:latest
     ports:
       - "5678:5678"
