@@ -1,187 +1,135 @@
-
 services:
-  name: n8n-server
-    image: n8nio/n8n:latest
-    ports:
-      - "5678:5678"
-    
+  - type: web
+    name: n8n
+    env: docker
+    region: frankfurt # optional (defaults to oregon)
+    plan: free # optional (defaults to starter)
+    branch: main # optional (defaults to master)
+    numInstances: 1
+    healthCheckPath: /healthz
     envVars:
-      # Generates a base64-encoded key for
-      # encrypting credentials in n8n
-      #
-      # Do not modify this value after it's generated!
-      # If you do, you'll lose access to all credentials
-      # encrypted with the previous value.
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: n8nDB
+          property: host
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: n8nDB
+          property: database
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: n8nDB
+          property: port
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: n8nDB
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: n8nDB
+          property: password
+      - key: PORT
+        value: 5678
+      - key: N8N_LOG_LEVEL
+        value: info
+      - key: GENERIC_TIMEZONE
+        value: Europe/Paris
+      - key: TZ
+        value: Europe/Paris
+      - key: N8N_DEFAULT_LOCALE
+        value: fr
       - key: N8N_ENCRYPTION_KEY
         generateValue: true
-    environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - N8N_USER_MANAGEMENT_DISABLED=true
-      - N8N_QUEUE_BULL_REDIS_URL=redis://vincent:vincent@redis:6379
-      - N8N_QUEUE_BULL_PREFIX=n8n
-      - N8N_EXECUTIONS_MODE=queue
-      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-      - N8N_RUNNERS_ENABLED=true
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_DATABASE=n8ndb
-      - DB_POSTGRESDB_USER=vincent
-      - DB_POSTGRESDB_PASSWORD=vincent
-    volumes:
-      - ./n8n_data:/home/node/.n8n
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - n8n_network
+      - key: WEBHOOK_URL
+        sync: false
+      - key: EXECUTIONS_MODE
+        value: queue
+      - key: QUEUE_BULL_REDIS_HOST
+        fromService:
+          name: redis
+          type: redis
+          property: host
+      - key: QUEUE_BULL_REDIS_PORT
+        fromService:
+          name: redis
+          type: redis
+          property: port
 
-  n8n-worker:
-    image: n8nio/n8n:latest
-    restart: unless-stopped
-    command: worker
+  - type: web
+    name: n8n-worker
+    env: docker
+    region: frankfurt # optional (defaults to oregon)
+    plan: starter # optional (defaults to starter)
+    branch: main # optional (defaults to master)
+    numInstances: 1
+    healthCheckPath: /healthz
+    dockerCommand: "n8n worker"
     envVars:
-      # Generates a base64-encoded key for
-      # encrypting credentials in n8n
-      #
-      # Do not modify this value after it's generated!
-      # If you do, you'll lose access to all credentials
-      # encrypted with the previous value.
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: n8nDB
+          property: host
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: n8nDB
+          property: database
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: n8nDB
+          property: port
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: n8nDB
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: n8nDB
+          property: password
+      - key: PORT
+        value: 5678
+      - key: N8N_LOG_LEVEL
+        value: info
+      - key: GENERIC_TIMEZONE
+        value: Europe/Paris
+      - key: TZ
+        value: Europe/Paris
+      - key: N8N_DEFAULT_LOCALE
+        value: fr
+      - key: QUEUE_HEALTH_CHECK_ACTIVE
+        value: true
+      - key: QUEUE_HEALTH_CHECK_PORT
+        value: 5678
       - key: N8N_ENCRYPTION_KEY
-        generateValue: true
-    environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - N8N_USER_MANAGEMENT_DISABLED=true
-      - N8N_QUEUE_BULL_REDIS_URL=redis://vincent:vincent@redis:6379
-      - N8N_QUEUE_BULL_PREFIX=n8n
-      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-      - N8N_RUNNERS_ENABLED=true
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_DATABASE=n8ndb
-      - DB_POSTGRESDB_USER=vincent
-      - DB_POSTGRESDB_PASSWORD=vincent
-    volumes:
-      - ./n8n_data:/home/node/.n8n
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - n8n_network
+        fromService:
+          name: n8n
+          type: web
+          envVarKey: N8N_ENCRYPTION_KEY
+      - key: EXECUTIONS_MODE
+        value: queue
+      - key: QUEUE_BULL_REDIS_HOST
+        fromService:
+          name: redis
+          type: redis
+          property: host
+      - key: QUEUE_BULL_REDIS_PORT
+        fromService:
+          name: redis
+          type: redis
+          property: port
 
-  redis:
-    image: redis:alpine
-    command: redis-server --requirepass vincent --bind 0.0.0.0
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "vincent", "ping"]
-      interval: 5s
-      timeout: 30s
-      retries: 3
-    volumes:
-      - ./redis_data:/data
-    networks:
-      - n8n_network
+  - type: redis
+    name: redis
+    region: frankfurt # optional (defaults to oregon)
+    plan: free # choose appropriate plan based on your need
+    ipAllowList: # allow external connections from everywhere
+    - source: 0.0.0.0/0
+      description: everywhere
 
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=vincent
-      - POSTGRES_PASSWORD=vincent
-      - POSTGRES_DB=n8ndb
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vincent -d n8ndb && psql -U vincent -d n8ndb -c 'SELECT 1'"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - n8n_network
-
-volumes:
-  n8n_data:
-  redis_data:
-  postgres_data:
-
-networks:
-  n8n_network:
-    driver: bridge
-
-
-
-
-# Use this Blueprint to deploy n8n on Render as a web
-# service that uses a Postgres database to store
-# workflow data.
-#
-# This Blueprint uses free instance types (specified by
-# `plan`) for both the web service and the database. You
-# can upgrade to paid instance types at any time to
-# increase resources.
-
-# services:
-#   - type: web
-#     plan: free
-#     # This is the runtime for services that pull a prebuilt Docker image
-#     runtime: image
-#     # You can give the service any name
-#     name: n8n-service
-#     image:
-#       # Pulls the n8n image tagged as latest from Docker Hub
-#       url: docker.io/n8nio/n8n:latest
-
-#     # All environment variables defined below are required!
-#     #
-#     # You can define additional environment variables as needed.
-#     envVars:
-#       # Generates a base64-encoded key for
-#       # encrypting credentials in n8n
-#       #
-#       # Do not modify this value after it's generated!
-#       # If you do, you'll lose access to all credentials
-#       # encrypted with the previous value.
-#       - key: N8N_ENCRYPTION_KEY
-#         generateValue: true
-
-#       # These automatically populate connection details 
-#       # for the Render Postgres database defined below
-#       - key: DB_TYPE
-#         value: postgresdb
-#       - key: DB_POSTGRESDB_DATABASE
-#         fromDatabase:
-#           name: n8n-db
-#           property: database
-#       - key: DB_POSTGRESDB_HOST
-#         fromDatabase:
-#           name: n8n-db
-#           property: host
-#       - key: DB_POSTGRESDB_PASSWORD
-#         fromDatabase:
-#           name: n8n-db
-#           property: password
-#       - key: DB_POSTGRESDB_USER
-#         fromDatabase:
-#           name: n8n-db
-#           property: user
-
-# databases:
-#   - name: n8n-db
-#     plan: free
-#     # The free instance type is limited to 1 GB of disk
-#     # space.
-#     #
-#     # If you later upgrade to a paid instance type, you can
-#     # increase the disk size to any multiple of 5 GB by
-#     # setting the `diskSizeGB` property.
-#     #
-#     # diskSizeGB: 5
+databases:
+  - name: n8nDB
+    region: frankfurt # optional (defaults to oregon)
+    plan: basic-256mb
